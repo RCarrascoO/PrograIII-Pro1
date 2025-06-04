@@ -1,5 +1,5 @@
-from .vertex_base import Vertex
-from .edge_base import Edge
+from vertex_base import Vertex
+from edge_base import Edge
 
 class Graph:
     def __init__(self, directed=False):
