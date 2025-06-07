@@ -1,5 +1,5 @@
-from vertex_base import Vertex
-from edge_base import Edge
+from model.vertex_base import Vertex
+from model.edge_base import Edge
 
 class Graph:
     def __init__(self, directed=False):
@@ -7,17 +7,19 @@ class Graph:
         self._outgoing = {}        # Diccionario: vértice -> adyacentes
         self._incoming = {} if directed else self._outgoing
         self._directed = directed  # Tipo de grafo: True si es dirigido
+        self.node_types = {}  # Diccionario para almacenar tipos de nodos
 
     def is_directed(self):
         """Indica si el grafo es dirigido."""
         return self._directed
 
-    def insert_vertex(self, element):
-        """Crea un nuevo vértice y lo agrega al grafo."""
+    def insert_vertex(self, element, node_type='client'):
+        """Crea un nuevo vértice con tipo específico"""
         v = Vertex(element)
-        self._outgoing[v] = {}    # Agrega vértice al diccionario de salidas
+        self._outgoing[v] = {}
         if self._directed:
-            self._incoming[v] = {}  # Solo si es dirigido, agrega entrada
+            self._incoming[v] = {}
+        self.node_types[v] = node_type  # Almacena el tipo de nodo
         return v
 
     def insert_edge(self, u, v, element):
@@ -116,3 +118,8 @@ class Graph:
         if len(result) != len(in_degree):
             raise ValueError("Graph has a cycle. Topological sort not possible.")
         return result
+
+
+    def get_node_type(self, vertex):
+        """Devuelve el tipo de nodo (almacen, recarga, cliente)"""
+        return self.node_types.get(vertex, 'client')    
