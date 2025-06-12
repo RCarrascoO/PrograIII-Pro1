@@ -69,10 +69,17 @@ def explore_network_tab():
     with col2:
         destination = st.selectbox("Destination", node_names, key='destination')
     
+    # --- Guardar selección en session_state ---
+    if "last_route" not in st.session_state:
+        st.session_state.last_route = None
+    if "last_origin" not in st.session_state:
+        st.session_state.last_origin = None
+    if "last_destination" not in st.session_state:
+        st.session_state.last_destination = None
+    
     if st.button("🔍 Calculate Route"):
         origin_node = next(v for v in nodes if str(v) == origin)
-        dest_node = next(v for v in nodes if str(v) == destination)
-        
+        dest_node = next(v for v in nodes if str(v) == destination)    
         route = sim.find_route_with_recharge(origin_node, dest_node)
         
         if route:
@@ -91,6 +98,24 @@ def explore_network_tab():
             recharge_stops = sum(1 for node in route.path 
                                if graph.get_node_type(node) == 'recharge')
             cols[2].metric("Recharge Stops", recharge_stops)
+
+            # Botón para completar la orden
+            if st.button("✅ Completar Orden"):
+                # Busca la orden activa correspondiente (puedes ordenar por prioridad si quieres)
+                sorted_orders = sorted(
+                    sim.active_orders,
+                    key=lambda o: getattr(o, "priority", 9999)
+                )
+                for order in sorted_orders:
+                    if (str(order.origin) == origin and str(order.destination) == destination and order.status != "completed"):
+                        order.route = route
+                        order.cost = route.cost
+                        order.status = "completed"
+                        order.completed_at = datetime.now()
+                        sim.completed_orders.append(order)
+                        sim.active_orders.remove(order)
+                        st.success("Order marked as completed!")
+                        break
         else:
             st.error("No valid route found with current battery limit")
 
@@ -103,29 +128,33 @@ def clients_orders_tab():
         return
     
     sim = st.session_state.sim
-    
-    st.subheader("Active Orders")
-    if not sim.active_orders:
-        st.info("No active orders")
+
+    # --- Clients Section ---
+    st.subheader("Clients")
+    if hasattr(sim, "clients"):
+        clients = sim.clients
+        if clients:
+            for client in clients:
+                # Si client es un objeto, muestra su __dict__ o usa un método to_dict()
+                st.json(client.__dict__ if hasattr(client, "__dict__") else str(client), expanded=True)
+        else:
+            st.info("No clients found.")
     else:
-        for order in sim.active_orders:
-            with st.expander(f"Order {order.id}"):
-                cols = st.columns(3)
-                cols[0].write(f"**From:** {order.origin}")
-                cols[1].write(f"**To:** {order.destination}")
-                cols[2].write(f"**Priority:** {order.priority}")
-    
-    st.subheader("Completed Orders")
-    if not sim.completed_orders:
-        st.info("No completed orders yet")
+        st.info("No clients data available in simulation.")
+
+    # --- Orders Section ---
+    st.subheader("Orders")
+    orders = []
+    if hasattr(sim, "active_orders"):
+        orders.extend(sim.active_orders)
+    if hasattr(sim, "completed_orders"):
+        orders.extend(sim.completed_orders)
+    if orders:
+        for order in orders:
+            # Si order es un objeto, muestra su __dict__ o usa un método to_dict()
+            st.json(order.__dict__ if hasattr(order, "__dict__") else str(order), expanded=True)
     else:
-        for order in sim.completed_orders[:10]:  # Mostrar solo las primeras 10
-            with st.expander(f"Order {order.id} - Delivered"):
-                cols = st.columns(4)
-                cols[0].write(f"**Route:** {getattr(order.route, 'path_str', lambda: 'No route')()}")
-                cols[1].write(f"**Cost:** {order.cost}")
-                cols[2].write(f"**Completed:** {order.completed_at.strftime('%Y-%m-%d %H:%M')}")
-                cols[3].write(f"**Priority:** {order.priority}")
+        st.info("No orders found.")
 
 def route_analytics_tab():
     st.header("📊 Route Analytics")

@@ -1,6 +1,6 @@
 import networkx as nx
 import matplotlib.pyplot as plt
-from model.graph_base import Graph
+from model import Graph
 
 class NetworkXAdapter:
     @staticmethod

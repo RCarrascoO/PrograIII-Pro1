@@ -39,15 +39,7 @@ class Simulation:
         """Procesa un lote de órdenes"""
         for _ in range(n_orders):
             self.generate_order()
-        
-        for order in self.active_orders[:]:
-            route = self.find_route_with_recharge(order.origin, order.destination)
-            if route:
-                self._register_route(route)
-                order.complete(route.cost)
-                self.completed_orders.append(order)
-                self.active_orders.remove(order)
-    
+
     def _register_route(self, route):
         """Registra una ruta en el AVL y actualiza frecuencias"""
         route_str = route.path_str()

@@ -1,5 +1,5 @@
 import random
-from model.graph_base import Graph
+from model import Graph
 
 class SimulationInitializer:
     @staticmethod
