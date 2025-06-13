@@ -131,15 +131,6 @@ def explore_network_tab():
             st.error(route_message)
 
     # Mostrar detalles de la ruta si existe
-    if show_route and route:
-        st.subheader("Route Details")
-        cols = st.columns(3)
-        cols[0].metric("Total Nodes", len(route.path))
-        cols[1].metric("Total Cost", route.cost)
-        recharge_stops = sum(1 for node in route.path 
-                            if graph.get_node_type(node) == 'recharge')
-        cols[2].metric("Recharge Stops", recharge_stops)
-
     # --- BOTÓN COMPLETAR ORDEN SOLO SI HAY RUTA Y ORDEN ---
     if show_route and route:
         st.subheader("Route Details")
