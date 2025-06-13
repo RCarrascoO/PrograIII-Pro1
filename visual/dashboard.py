@@ -142,6 +142,15 @@ def explore_network_tab():
 
     # --- BOTÓN COMPLETAR ORDEN SOLO SI HAY RUTA Y ORDEN ---
     if show_route and route:
+        st.subheader("Route Details")
+        cols = st.columns(3)
+        cols[0].metric("Total Nodes", len(route.path))
+        cols[1].metric("Total Cost", route.cost)
+        recharge_stops = sum(1 for node in route.path 
+                            if graph.get_node_type(node) == 'recharge')
+        cols[2].metric("Recharge Stops", recharge_stops)
+
+        # --- Mostrar botón solo si hay orden coincidente ---
         matching_orders = [
             order for order in sim.active_orders
             if str(order.origin) == origin and str(order.destination) == destination and order.status != "completed"
@@ -166,6 +175,8 @@ def explore_network_tab():
                     st.session_state.last_route = None
                     st.session_state.route_message = ""
                     break
+        else:
+            st.info("No matching active orders for this route.")
 
 def clients_orders_tab():
     st.header("📦 Clients & Orders")
@@ -260,18 +271,35 @@ def general_stats_tab():
     # Estadísticas de visitas
     visit_stats = sim.get_node_visit_stats()
     
-    st.subheader("Most Visited Nodes")
+    st.subheader("Most Visited Nodes by Role")
     if not visit_stats:
         st.info("No node visit data available")
-    else:
-        top_nodes = visit_stats[:10]
-        nodes, visits = zip(*top_nodes)
-        
-        fig2, ax2 = plt.subplots(figsize=(10, 6))
-        ax2.barh(nodes, visits)
-        ax2.set_xlabel("Number of Visits")
-        ax2.set_title("Top 10 Most Visited Nodes")
-        st.pyplot(fig2)
+        return
+
+    # Inicializar diccionario de visitas por rol con todos los nodos (aunque no hayan sido visitados)
+    role_visits = {"client": [], "warehouse": [], "recharge": []}
+    # Crear un set de nodos visitados para acceso rápido
+    visited_dict = {str(node): visits for node, visits in visit_stats}
+    for node in graph.vertices():
+        node_type = graph.get_node_type(node)
+        if node_type in role_visits:
+            visits = visited_dict.get(str(node), 0)
+            role_visits[node_type].append((str(node), visits))
+
+    # Mostrar un gráfico para cada rol específico
+    for role in ["client", "warehouse", "recharge"]:
+        nodes_visits = sorted(role_visits[role], key=lambda x: x[1], reverse=True)[:10]  # Top 10 por rol
+        if nodes_visits:
+            nodes, visits = zip(*nodes_visits)
+            st.markdown(f"**Role: {role.capitalize()}**")
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.barh(nodes, visits)
+            ax.set_xlabel("Number of Visits")
+            ax.set_title(f"Top 10 Most Visited Nodes ({role.capitalize()})")
+            st.pyplot(fig)
+            st.markdown("---")
+        else:
+            st.info(f"No nodes of role: {role.capitalize()} in the graph.")
 
 def main():
     st.set_page_config(
