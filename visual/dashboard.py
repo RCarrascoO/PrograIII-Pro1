@@ -5,6 +5,7 @@ from sim.simulation import Simulation
 from sim.init_simulation import SimulationInitializer
 from visual.networkx_adapter import NetworkXAdapter
 from datetime import datetime
+from visual.avl_visualizer import avl_visualizer
 
 def init_session_state():
     if 'sim' not in st.session_state:
@@ -158,6 +159,8 @@ def explore_network_tab():
                     order.completed_at = datetime.now()
                     sim.completed_orders.append(order)
                     sim.active_orders.remove(order)
+                    # --- Insertar la ruta en el AVL ---
+                    sim.route_avl.insert(route.path_str(), route)
                     st.success("Order marked as completed!")
                     st.session_state.show_route = False
                     st.session_state.last_route = None
@@ -227,34 +230,9 @@ def route_analytics_tab():
         for i, (route_str, route) in enumerate(top_routes, 1):
             st.write(f"{i}. **{route_str}** (Used {route.frequency} times)")
         
-        # Visualización del árbol AVL
         st.subheader("AVL Tree Visualization")
         st.info("This shows the structure of the AVL tree storing all routes")
-        
-        # Crear representación simplificada del AVL
-        G = nx.Graph()
-        nodes = []
-        
-        def add_nodes(node):
-            if node:
-                nodes.append(node.key)
-                if node.left:
-                    G.add_edge(node.key, node.left.key)
-                    add_nodes(node.left)
-                if node.right:
-                    G.add_edge(node.key, node.right.key)
-                    add_nodes(node.right)
-        
-        add_nodes(sim.route_avl.root)
-        
-        if nodes:
-            pos = nx.spring_layout(G)
-            plt.figure(figsize=(12, 8))
-            nx.draw(G, pos, with_labels=True, node_size=2000, node_color='lightblue', 
-                   font_size=10, font_weight='bold')
-            st.pyplot(plt)
-        else:
-            st.warning("AVL tree is empty")
+        avl_visualizer(sim.route_avl.root)
 
 def general_stats_tab():
     st.header("📈 General Statistics")
