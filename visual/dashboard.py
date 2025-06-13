@@ -28,8 +28,24 @@ def run_simulation_tab():
         try:
             graph = SimulationInitializer.create_connected_graph(n_nodes, m_edges)
             sim = Simulation(graph)
+
+            # Vincular clientes a nodos de tipo "cliente"
+            client_nodes = [v for v in graph.vertices() if graph.get_node_type(v) == "client"]
+            sim.clients = []
+            for idx, node in enumerate(client_nodes):
+                client_id = f"CLI_{idx}"
+                client = sim.generate_clients(client_id=client_id)
+                client.node_id = node  # Guarda el nodo asociado
+
             sim.process_orders(n_orders)
-            
+
+            # --- ACTUALIZAR total_orders de cada cliente ---
+            for client in sim.clients:
+                client.total_orders = sum(
+                    1 for order in sim.active_orders + sim.completed_orders
+                    if hasattr(client, "node_id") and order.destination == client.node_id
+                )
+
             st.session_state.graph = graph
             st.session_state.sim = sim
             st.success("✅ Simulation completed successfully!")
@@ -41,9 +57,14 @@ def run_simulation_tab():
             cols[1].metric("Total Edges", m_edges)
             cols[2].metric("Orders Processed", n_orders)
             
-            # Mostrar gráfico del grafo
+            # --- NUEVO: calcular y guardar el layout ---
+            nx_graph = NetworkXAdapter.to_networkx(graph)
+            pos = nx.spring_layout(nx_graph, seed=42)  # Usa un seed para que siempre sea igual
+            st.session_state.graph_pos = pos  # Guardar posiciones en session_state
+
+            # Mostrar gráfico del grafo (estilo base)
             fig = plt.figure(figsize=(10, 8))
-            NetworkXAdapter.draw_graph(graph)
+            NetworkXAdapter.draw_graph(graph, pos=pos)
             st.pyplot(fig)
             
         except Exception as e:
@@ -59,7 +80,12 @@ def explore_network_tab():
     
     graph = st.session_state.graph
     sim = st.session_state.sim
-    
+
+    pos = st.session_state.get("graph_pos", None)
+    if pos is None:
+        st.warning("No graph layout found. Please run a simulation first.")
+        return
+
     nodes = list(graph.vertices())
     node_names = [str(v) for v in nodes]
     
@@ -68,56 +94,75 @@ def explore_network_tab():
         origin = st.selectbox("Origin", node_names, key='origin')
     with col2:
         destination = st.selectbox("Destination", node_names, key='destination')
-    
-    # --- Guardar selección en session_state ---
-    if "last_route" not in st.session_state:
-        st.session_state.last_route = None
-    if "last_origin" not in st.session_state:
-        st.session_state.last_origin = None
-    if "last_destination" not in st.session_state:
-        st.session_state.last_destination = None
-    
+
+    # Botón para calcular ruta
     if st.button("🔍 Calculate Route"):
         origin_node = next(v for v in nodes if str(v) == origin)
         dest_node = next(v for v in nodes if str(v) == destination)    
         route = sim.find_route_with_recharge(origin_node, dest_node)
-        
         if route:
-            st.success(f"**Route:** {route.path_str()} | **Cost:** {route.cost}")
-            
-            # Mostrar gráfico con ruta resaltada
-            fig = plt.figure(figsize=(10, 8))
-            NetworkXAdapter.draw_graph(graph, route.path)
-            st.pyplot(fig)
-            
-            # Mostrar detalles de la ruta
-            st.subheader("Route Details")
-            cols = st.columns(3)
-            cols[0].metric("Total Nodes", len(route.path))
-            cols[1].metric("Total Cost", route.cost)
-            recharge_stops = sum(1 for node in route.path 
-                               if graph.get_node_type(node) == 'recharge')
-            cols[2].metric("Recharge Stops", recharge_stops)
+            st.session_state.show_route = True
+            st.session_state.last_route = route
+            st.session_state.route_message = f"**Route:** {route.path_str()} | **Cost:** {route.cost}"
+        else:
+            st.session_state.show_route = False
+            st.session_state.last_route = None
+            st.session_state.route_message = "No valid route found with current battery limit"
 
-            # Botón para completar la orden
-            if st.button("✅ Completar Orden"):
-                # Busca la orden activa correspondiente (puedes ordenar por prioridad si quieres)
+    # Mostrar el grafo base o con la ruta resaltada según el estado
+    route = st.session_state.get("last_route", None)
+    show_route = st.session_state.get("show_route", False)
+    route_message = st.session_state.get("route_message", "")
+
+    st.subheader("Network Graph")
+    fig = plt.figure(figsize=(10, 8))
+    if show_route and route:
+        NetworkXAdapter.draw_graph(graph, highlight_path=route.path, pos=pos)
+    else:
+        NetworkXAdapter.draw_graph(graph, highlight_path=None, pos=pos)
+    st.pyplot(fig)
+
+    # Mostrar mensaje de ruta
+    if route_message:
+        if show_route and route:
+            st.success(route_message)
+        else:
+            st.error(route_message)
+
+    # Mostrar detalles de la ruta si existe
+    if show_route and route:
+        st.subheader("Route Details")
+        cols = st.columns(3)
+        cols[0].metric("Total Nodes", len(route.path))
+        cols[1].metric("Total Cost", route.cost)
+        recharge_stops = sum(1 for node in route.path 
+                            if graph.get_node_type(node) == 'recharge')
+        cols[2].metric("Recharge Stops", recharge_stops)
+
+    # --- BOTÓN COMPLETAR ORDEN SOLO SI HAY RUTA Y ORDEN ---
+    if show_route and route:
+        matching_orders = [
+            order for order in sim.active_orders
+            if str(order.origin) == origin and str(order.destination) == destination and order.status != "completed"
+        ]
+        if matching_orders:
+            if st.button("✅ Completar Orden", key="complete_order_btn"):
                 sorted_orders = sorted(
-                    sim.active_orders,
+                    matching_orders,
                     key=lambda o: getattr(o, "priority", 9999)
                 )
                 for order in sorted_orders:
-                    if (str(order.origin) == origin and str(order.destination) == destination and order.status != "completed"):
-                        order.route = route
-                        order.cost = route.cost
-                        order.status = "completed"
-                        order.completed_at = datetime.now()
-                        sim.completed_orders.append(order)
-                        sim.active_orders.remove(order)
-                        st.success("Order marked as completed!")
-                        break
-        else:
-            st.error("No valid route found with current battery limit")
+                    order.route = route
+                    order.cost = route.cost
+                    order.status = "completed"
+                    order.completed_at = datetime.now()
+                    sim.completed_orders.append(order)
+                    sim.active_orders.remove(order)
+                    st.success("Order marked as completed!")
+                    st.session_state.show_route = False
+                    st.session_state.last_route = None
+                    st.session_state.route_message = ""
+                    break
 
 def clients_orders_tab():
     st.header("📦 Clients & Orders")
@@ -128,15 +173,18 @@ def clients_orders_tab():
         return
     
     sim = st.session_state.sim
-
     # --- Clients Section ---
     st.subheader("Clients")
     if hasattr(sim, "clients"):
         clients = sim.clients
         if clients:
             for client in clients:
-                # Si client es un objeto, muestra su __dict__ o usa un método to_dict()
-                st.json(client.__dict__ if hasattr(client, "__dict__") else str(client), expanded=True)
+                if hasattr(client, "to_dict"):
+                    st.json(client.to_dict(), expanded=True)
+                elif hasattr(client, "__dict__"):
+                    st.json(client.__dict__, expanded=True)
+                else:
+                    st.json(str(client), expanded=True)
         else:
             st.info("No clients found.")
     else:
@@ -151,8 +199,12 @@ def clients_orders_tab():
         orders.extend(sim.completed_orders)
     if orders:
         for order in orders:
-            # Si order es un objeto, muestra su __dict__ o usa un método to_dict()
-            st.json(order.__dict__ if hasattr(order, "__dict__") else str(order), expanded=True)
+            if hasattr(order, "to_dict"):
+                st.json(order.to_dict(), expanded=True)
+            elif hasattr(order, "__dict__"):
+                st.json(order.__dict__, expanded=True)
+            else:
+                st.json(str(order), expanded=True)
     else:
         st.info("No orders found.")
 

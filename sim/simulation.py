@@ -5,10 +5,12 @@ from tda.hash_map import HashMap
 from domain.route import Route
 from domain.order import Order
 from datetime import datetime, timedelta
+from domain.client import Client
 
 class Simulation:
     def __init__(self, graph):
         self.graph = graph
+        self.clients = []
         self.route_avl = AVL()  # AVL para rutas frecuentes
         self.orders_map = HashMap()  # Mapa de órdenes
         self.active_orders = []
@@ -34,12 +36,21 @@ class Simulation:
         self.active_orders.append(new_order)
         self.orders_map.put(order_id, new_order)
         return new_order
-    
+    def generate_clients(self, client_id = None, name=None, type_=None, total_orders=0):
+        """Genera un nuevo cliente con parámetros opcionales o aleatorios"""
+        if client_id is None:
+            client_id = f"CLI_{len(self.clients) + 1}"
+        if name is None:
+            name = random.choice(['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank','Grace', 'Heidi'])
+        if type_ is None:
+            type_ = random.choice(['regular', 'premium', 'vip'])      
+        new_client = Client(client_id, name, type_, total_orders)
+        self.clients.append(new_client)
+        return new_client
     def process_orders(self, n_orders=10):
         """Procesa un lote de órdenes"""
         for _ in range(n_orders):
             self.generate_order()
-
     def _register_route(self, route):
         """Registra una ruta en el AVL y actualiza frecuencias"""
         route_str = route.path_str()
