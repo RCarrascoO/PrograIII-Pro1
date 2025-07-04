@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Backend no interactivo para generar PDFs
 from matplotlib.backends.backend_pdf import PdfPages
-import pandas as pd
 from datetime import datetime
 import io
 import streamlit as st
@@ -24,19 +23,13 @@ class PDFReportGenerator:
             # Página 1: Portada
             self._create_cover_page(pdf)
             
-            # Página 2: Estadísticas generales
-            self._create_general_stats_page(pdf)
+            # Página 2: Información del algoritmo y distribución de nodos
+            self._create_algorithm_and_nodes_page(pdf)
             
-            # Página 3: Rutas más frecuentes
-            self._create_frequent_routes_page(pdf)
-            
-            # Página 4: Distribución de nodos
-            self._create_node_distribution_page(pdf)
-            
-            # Página 5: Estadísticas de visitas
+            # Página 3: Estadísticas de visitas por nodo
             self._create_visit_stats_page(pdf)
             
-            # Página 6: Análisis de clientes
+            # Página 4: Análisis de clientes
             self._create_client_analysis_page(pdf)
         
         buffer.seek(0)
@@ -48,7 +41,7 @@ class PDFReportGenerator:
         ax.axis('off')
         
         # Título principal
-        ax.text(0.5, 0.8, '🚁 DRONE LOGISTICS SYSTEM', 
+        ax.text(0.5, 0.8, 'DRONE LOGISTICS SYSTEM', 
                 fontsize=24, fontweight='bold', ha='center', va='center')
         
         # Subtítulo
@@ -86,71 +79,12 @@ class PDFReportGenerator:
         pdf.savefig(fig, bbox_inches='tight')
         plt.close(fig)
     
-    def _create_general_stats_page(self, pdf):
-        """Crea la página de estadísticas generales"""
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 10))
+    def _create_algorithm_and_nodes_page(self, pdf):
+        """Crea la página con información del algoritmo y distribución de nodos"""
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
         
-        # Estadísticas de órdenes
-        completed_orders = len(self.sim.completed_orders)
-        active_orders = len(self.sim.active_orders)
-        
-        if completed_orders > 0:
-            total_distance = sum(getattr(order, 'cost', 0) for order in self.sim.completed_orders)
-            avg_distance = total_distance / completed_orders
-            
-            # Contar paradas de recarga
-            total_recharge_stops = 0
-            for order in self.sim.completed_orders:
-                if hasattr(order, 'route') and order.route:
-                    recharge_stops = sum(1 for node in order.route.path 
-                                       if self.graph.get_node_type(node) == 'recharge')
-                    total_recharge_stops += recharge_stops
-            
-            avg_recharge_stops = total_recharge_stops / completed_orders
-        else:
-            total_distance = 0
-            avg_distance = 0
-            avg_recharge_stops = 0
-        
-        # Gráfico 1: Estado de órdenes
-        if completed_orders > 0 or active_orders > 0:
-            orders_data = ['Completadas', 'Activas']
-            orders_values = [completed_orders, active_orders]
-            colors1 = ['#00FF00', '#ff6b6b']
-            ax1.pie(orders_values, labels=orders_data, autopct='%1.1f%%', colors=colors1)
-            ax1.set_title('Estado de Órdenes', fontweight='bold')
-        else:
-            ax1.text(0.5, 0.5, 'No hay órdenes disponibles', ha='center', va='center')
-            ax1.set_title('Estado de Órdenes', fontweight='bold')
-        
-        # Gráfico 2: Métricas de rendimiento
-        metrics = ['Dist. Total', 'Dist. Prom.', 'Recarga Prom.']
-        values = [total_distance, avg_distance, avg_recharge_stops]
-        
-        bars = ax2.bar(metrics, values, color=['#45b7d1', '#96ceb4', '#ffeaa7'])
-        ax2.set_title('Métricas de Rendimiento', fontweight='bold')
-        ax2.set_ylabel('Valores')
-        
-        # Agregar valores en las barras
-        for bar, value in zip(bars, values):
-            height = bar.get_height()
-            ax2.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
-                    f'{value:.2f}', ha='center', va='bottom')
-        
-        # Gráfico 3: Distribución de tipos de nodo
-        node_types = {}
-        for node in self.graph.vertices():
-            node_type = self.graph.get_node_type(node)
-            node_types[node_type] = node_types.get(node_type, 0) + 1
-        
-        if node_types:
-            colors3 = ['#ff6b6b', '#00FF00', '#45b7d1', '#96ceb4', '#ffeaa7']
-            ax3.pie(node_types.values(), labels=node_types.keys(), 
-                   autopct='%1.1f%%', colors=colors3[:len(node_types)])
-            ax3.set_title('Distribución de Tipos de Nodo', fontweight='bold')
-        
-        # Gráfico 4: Información del algoritmo
-        ax4.axis('off')
+        # Lado izquierdo: Información del algoritmo
+        ax1.axis('off')
         algorithm_info = """ALGORITMO DIJKSTRA
 
 ✓ Garantiza rutas óptimas
@@ -162,95 +96,21 @@ BENEFICIOS:
 • Eficiencia energética
 • Menor tiempo de entrega
 • Optimización de recursos
-• Reducción de costos operativos"""
+• Reducción de costos operativos
+
+CARACTERÍSTICAS:
+• Complejidad: O((V + E) log V)
+• Grafo no dirigido
+• Soporte para múltiples destinos
+• Manejo de restricciones de batería"""
         
-        ax4.text(0.1, 0.9, algorithm_info, 
-                fontsize=10, ha='left', va='top',
+        ax1.text(0.1, 0.9, algorithm_info, 
+                fontsize=11, ha='left', va='top',
                 bbox=dict(boxstyle="round,pad=0.5", facecolor='lightcyan'))
         
-        plt.tight_layout()
-        pdf.savefig(fig, bbox_inches='tight')
-        plt.close(fig)
-    
-    def _create_frequent_routes_page(self, pdf):
-        """Crea la página de rutas más frecuentes"""
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        ax1.set_title('Información del Algoritmo', fontweight='bold', fontsize=14)
         
-        # Obtener rutas más frecuentes
-        try:
-            top_routes = self.sim.get_most_frequent_routes(10)
-            
-            if top_routes:
-                route_names = []
-                frequencies = []
-                costs = []
-                
-                for i, route_data in enumerate(top_routes):
-                    if isinstance(route_data, tuple) and len(route_data) == 2:
-                        route_str, route = route_data
-                        frequency = getattr(route, 'frequency', 1)
-                        cost = getattr(route, 'cost', 0)
-                        
-                        # Acortar nombres de rutas para mejor visualización
-                        short_name = f"Ruta {i+1}"
-                        route_names.append(short_name)
-                        frequencies.append(frequency)
-                        costs.append(cost)
-                
-                if route_names:
-                    # Gráfico de frecuencias
-                    bars1 = ax1.bar(route_names, frequencies, color='#00FF00')
-                    ax1.set_title('Rutas Más Frecuentes', fontweight='bold')
-                    ax1.set_xlabel('Rutas')
-                    ax1.set_ylabel('Frecuencia de Uso')
-                    
-                    # Agregar valores en las barras
-                    for bar, freq in zip(bars1, frequencies):
-                        height = bar.get_height()
-                        ax1.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
-                                f'{freq}', ha='center', va='bottom')
-                    
-                    plt.setp(ax1.get_xticklabels(), rotation=45, ha='right')
-                    
-                    # Gráfico de costos
-                    bars2 = ax2.bar(route_names, costs, color='#45b7d1')
-                    ax2.set_title('Costos de Rutas Frecuentes', fontweight='bold')
-                    ax2.set_xlabel('Rutas')
-                    ax2.set_ylabel('Costo')
-                    
-                    # Agregar valores en las barras
-                    for bar, cost in zip(bars2, costs):
-                        height = bar.get_height()
-                        ax2.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
-                                f'{cost:.1f}', ha='center', va='bottom')
-                    
-                    plt.setp(ax2.get_xticklabels(), rotation=45, ha='right')
-                else:
-                    ax1.text(0.5, 0.5, 'No hay datos de rutas disponibles', 
-                            ha='center', va='center', transform=ax1.transAxes)
-                    ax2.text(0.5, 0.5, 'No hay datos de costos disponibles', 
-                            ha='center', va='center', transform=ax2.transAxes)
-            else:
-                ax1.text(0.5, 0.5, 'No hay rutas frecuentes registradas', 
-                        ha='center', va='center', transform=ax1.transAxes)
-                ax2.text(0.5, 0.5, 'Complete algunas órdenes para ver datos', 
-                        ha='center', va='center', transform=ax2.transAxes)
-                
-        except Exception as e:
-            ax1.text(0.5, 0.5, f'Error al obtener rutas: {str(e)}', 
-                    ha='center', va='center', transform=ax1.transAxes)
-            ax2.text(0.5, 0.5, 'No se pudieron cargar los datos', 
-                    ha='center', va='center', transform=ax2.transAxes)
-        
-        plt.tight_layout()
-        pdf.savefig(fig, bbox_inches='tight')
-        plt.close(fig)
-    
-    def _create_node_distribution_page(self, pdf):
-        """Crea la página de distribución de nodos"""
-        fig, ax = plt.subplots(figsize=self.fig_size)
-        
-        # Contar tipos de nodos
+        # Lado derecho: Distribución de tipos de nodo
         node_types = {}
         for node in self.graph.vertices():
             node_type = self.graph.get_node_type(node)
@@ -258,13 +118,13 @@ BENEFICIOS:
         
         if node_types:
             colors = ['#ff6b6b', '#00FF00', '#45b7d1', '#96ceb4', '#ffeaa7']
-            wedges, texts, autotexts = ax.pie(node_types.values(), 
+            wedges, texts, autotexts = ax2.pie(node_types.values(), 
                                              labels=node_types.keys(), 
                                              autopct='%1.1f%%', 
                                              colors=colors[:len(node_types)],
                                              startangle=90)
             
-            ax.set_title('Distribución de Tipos de Nodo', fontweight='bold', fontsize=16)
+            ax2.set_title('Distribución de Tipos de Nodo', fontweight='bold', fontsize=14)
             
             # Mejorar la apariencia del texto
             for autotext in autotexts:
@@ -273,7 +133,7 @@ BENEFICIOS:
             
             # Agregar leyenda con conteos
             legend_labels = [f'{k}: {v} nodos' for k, v in node_types.items()]
-            ax.legend(wedges, legend_labels, title="Tipos de Nodo", 
+            ax2.legend(wedges, legend_labels, title="Tipos de Nodo", 
                      loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
         
         plt.tight_layout()
@@ -340,30 +200,18 @@ BENEFICIOS:
         plt.close(fig)
     
     def _create_client_analysis_page(self, pdf):
-        """Crea la página de análisis de clientes"""
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        """Crea la página de análisis de clientes - SOLO distribución de órdenes"""
+        fig, ax = plt.subplots(figsize=self.fig_size)
         
         # Análisis de clientes
         if hasattr(self.sim, 'clients') and self.sim.clients:
-            # Distribución por tipo de cliente
-            client_types = {}
             client_orders = []
             
             for client in self.sim.clients:
-                client_type = getattr(client, 'type_', 'unknown')
-                client_types[client_type] = client_types.get(client_type, 0) + 1
-                
                 total_orders = getattr(client, 'total_orders', 0)
                 client_orders.append(total_orders)
             
-            # Gráfico 1: Distribución por tipo de cliente
-            if client_types:
-                colors = ['#ff6b6b', '#00FF00', '#45b7d1', '#96ceb4', '#ffeaa7']
-                ax1.pie(client_types.values(), labels=client_types.keys(), 
-                       autopct='%1.1f%%', colors=colors[:len(client_types)])
-                ax1.set_title('Distribución por Tipo de Cliente', fontweight='bold')
-            
-            # Gráfico 2: Estadísticas de órdenes por cliente
+            # Estadísticas de órdenes por cliente
             if client_orders:
                 # Crear rangos de órdenes
                 order_ranges = {'0 órdenes': 0, '1-5 órdenes': 0, '6-10 órdenes': 0, '11+ órdenes': 0}
@@ -382,30 +230,48 @@ BENEFICIOS:
                 filtered_ranges = {k: v for k, v in order_ranges.items() if v > 0}
                 
                 if filtered_ranges:
-                    bars = ax2.bar(filtered_ranges.keys(), filtered_ranges.values(), 
+                    bars = ax.bar(filtered_ranges.keys(), filtered_ranges.values(), 
                                   color='#45b7d1')
-                    ax2.set_title('Distribución de Órdenes por Cliente', fontweight='bold')
-                    ax2.set_xlabel('Rango de Órdenes')
-                    ax2.set_ylabel('Número de Clientes')
+                    ax.set_title('Distribución de Órdenes por Cliente', fontweight='bold', fontsize=16)
+                    ax.set_xlabel('Rango de Órdenes')
+                    ax.set_ylabel('Número de Clientes')
                     
                     # Agregar valores en las barras
                     for bar, value in zip(bars, filtered_ranges.values()):
                         height = bar.get_height()
-                        ax2.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
+                        ax.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
                                 f'{value}', ha='center', va='bottom')
                     
-                    plt.setp(ax2.get_xticklabels(), rotation=45, ha='right')
+                    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+                    
+                    # Agregar información estadística
+                    total_clients = len(client_orders)
+                    avg_orders = sum(client_orders) / total_clients if total_clients > 0 else 0
+                    max_orders = max(client_orders) if client_orders else 0
+                    
+                    stats_text = f"""ESTADÍSTICAS DE CLIENTES:
+                    
+• Total de Clientes: {total_clients}
+• Promedio de Órdenes: {avg_orders:.2f}
+• Máximo de Órdenes: {max_orders}
+• Clientes Activos: {sum(1 for o in client_orders if o > 0)}"""
+                    
+                    ax.text(0.98, 0.98, stats_text, 
+                           transform=ax.transAxes,
+                           fontsize=10, ha='right', va='top',
+                           bbox=dict(boxstyle="round,pad=0.3", facecolor='lightyellow'))
                 else:
-                    ax2.text(0.5, 0.5, 'No hay datos de órdenes de clientes', 
-                            ha='center', va='center', transform=ax2.transAxes)
+                    ax.text(0.5, 0.5, 'No hay datos de órdenes de clientes', 
+                            ha='center', va='center', transform=ax.transAxes)
+                    ax.set_title('Distribución de Órdenes por Cliente', fontweight='bold', fontsize=16)
             else:
-                ax2.text(0.5, 0.5, 'No hay datos de órdenes de clientes', 
-                        ha='center', va='center', transform=ax2.transAxes)
+                ax.text(0.5, 0.5, 'No hay datos de órdenes de clientes', 
+                        ha='center', va='center', transform=ax.transAxes)
+                ax.set_title('Distribución de Órdenes por Cliente', fontweight='bold', fontsize=16)
         else:
-            ax1.text(0.5, 0.5, 'No hay datos de clientes disponibles', 
-                    ha='center', va='center', transform=ax1.transAxes)
-            ax2.text(0.5, 0.5, 'No hay datos de clientes disponibles', 
-                    ha='center', va='center', transform=ax2.transAxes)
+            ax.text(0.5, 0.5, 'No hay datos de clientes disponibles', 
+                    ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Distribución de Órdenes por Cliente', fontweight='bold', fontsize=16)
         
         plt.tight_layout()
         pdf.savefig(fig, bbox_inches='tight')
